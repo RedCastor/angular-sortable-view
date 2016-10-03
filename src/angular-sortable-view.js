@@ -544,7 +544,7 @@
 	].join(''));
 
 	function touchFix(e){
-		if(!('clientX' in e) && !('clientY' in e)) {
+		if(e.clientX === undefined && e.clientY === undefined) {
 			var touches = e.touches || e.originalEvent.touches;
 			if(touches && touches.length) {
 				e.clientX = touches[0].clientX;
