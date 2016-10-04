@@ -1,7 +1,7 @@
 {
   "name": "angular-sortable-view",
-  "version": "0.0.15",
-  "homepage": "http://kamilkp.github.io/angular-sortable-view/",
+  "version": "0.0.16-solit",
+  "homepage": "https://github.com/eaglus/angular-sortable-view",
   "authors": [
     "Kamil Pękala <kamilkp@gmail.com>"
   ],

@@ -1,9 +1,9 @@
 {
   "name": "angular-sortable-view",
-  "version": "0.0.15",
+  "version": "0.0.16-solit",
   "description": "Fully declarative (multi)sortable for AngularJS",
   "main": "./src/angular-sortable-view.js",
-  "homepage": "http://kamilkp.github.io/angular-sortable-view",
+  "homepage": "https://github.com/eaglus/angular-sortable-view",
   "author": {
     "name": "Kamil Pekala",
     "email": "kamilkp@gmail.com",
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kamilkp/angular-sortable-view.git"
+    "url": "https://github.com/eaglus/angular-sortable-view.git"
   },
   "devDependencies": {
     "grunt": "^0.4.5",
