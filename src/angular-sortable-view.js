@@ -9,6 +9,10 @@
 	/* jshint -W041 */
 	/* jshint -W030 */
 
+    var DRAG_START_TIMEOUT = 100;
+	var SCROLL_TIMEOUT = 200;
+    var SCROLL_DISTANCE = 5;
+
     /*
      Simple implementation of jQuery's .add method
      */
@@ -188,8 +192,6 @@
 			restrict: 'A',
 			controller: ['$scope', '$attrs', '$interpolate', '$parse', '$element', function($scope, $attrs, $interpolate, $parse, $rootElement){
 				var mapKey = $interpolate($attrs.svRoot)($scope) || $scope.$id;
-				if(!ROOTS_MAP[mapKey]) ROOTS_MAP[mapKey] = [];
-
 				var candidates;  // set of possible destinations
 				var $placeholder;// placeholder element
 				var options;     // sortable options
@@ -198,6 +200,12 @@
 				var $target;     // last best candidate
 				var isGrid       = false;
 				var onSort       = $parse($attrs.svOnSort);
+                var isScrolling = false;
+                var scrollingTimeoutId;
+
+                if (!ROOTS_MAP[mapKey]) {
+                    ROOTS_MAP[mapKey] = [];
+                }
 
 				// ----- hack due to https://github.com/angular/angular.js/issues/8044
 				$attrs.svOnStart = $attrs.$$element[0].attributes['sv-on-start'];
@@ -210,21 +218,22 @@
 				var onStart = $parse($attrs.svOnStart);
 				var onStop = $parse($attrs.svOnStop);
 
-                var isScrolling = false;
                 var scroll = function (step, delay) {
                     var rootElement = $rootElement[0];
                     var scrollTop = rootElement.scrollTop;
                     var upperBound = Math.max(0, rootElement.scrollHeight - rootElement.clientHeight);
                     var newScrollTop = Math.min(Math.max(0, rootElement.scrollTop + step), upperBound);
+                    isScrolling = true;
 
                     if (newScrollTop !== scrollTop) {
                         rootElement.scrollTop = newScrollTop;
 
-                        if (isScrolling) {
-                            setTimeout(function () {
+                        scrollingTimeoutId = setTimeout(function () {
+                            scrollingTimeoutId = null;
+                            if (isScrolling) {
                                 scroll(step, delay);
-                            }, delay);
-                        }
+                            }
+                        }, delay);
                     } else {
                         isScrolling = false;
                     }
@@ -233,6 +242,14 @@
 				this.sortingInProgress = function(){
 					return sortingInProgress;
 				};
+
+				this.stopScrolling = function() {
+				    if (scrollingTimeoutId) {
+				        clearTimeout(scrollingTimeoutId);
+                        scrollingTimeoutId = null;
+                    }
+                    isScrolling = false;
+                };
 
 				if($attrs.svGrid){ // sv-grid determined explicite
 					isGrid = $attrs.svGrid === "true" ? true : $attrs.svGrid === "false" ? false : null;
@@ -402,14 +419,12 @@
 
                     svRect = getBoundingClientRect(svElement[0], true);
                     if (scrollBoundTop > svRect.top) {
-                        isScrolling = true;
-                        scroll(-5, 200);
+                        scroll(-SCROLL_DISTANCE, SCROLL_TIMEOUT);
                     }
                     else if (scrollBoundBottom < svRect.bottom) {
-                        isScrolling = true;
-                        scroll(5, 200);
+                        scroll(SCROLL_DISTANCE, SCROLL_TIMEOUT);
                     } else {
-                        isScrolling = false;
+                        this.stopScrolling();
                     }
 				};
 
@@ -636,13 +651,13 @@
 
                     html.on('touchmove ' + touchEndEvents, cancel);
 
-                    switchTimer = setTimeout(switchToMousedown, 200);
+                    switchTimer = setTimeout(switchToMousedown, DRAG_START_TIMEOUT);
                 }
 
 				function onMouseDown(e, runMouseMoveHandler) {
 					touchFix(e);
 
-					if($controllers[1].sortingInProgress()) {
+					if ($controllers[1].sortingInProgress()) {
 					    return;
                     }
 
@@ -721,6 +736,7 @@
 					html.on(moveEvents, onMousemove).on(endEvents, onMouseup);
 
                     function onMouseup(e){
+                        $controllers[1].stopScrolling();
                         html.off(moveEvents, onMousemove);
                         html.off(endEvents, onMouseup);
                         html.removeClass('sv-sorting-in-progress');
