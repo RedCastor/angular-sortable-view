@@ -27,7 +27,7 @@
     angular.element(document.head).append([
         '<style>' +
         '.sv-helper{' +
-        'position: fixed !important;' +
+        'position: absolute !important;' +
         'z-index: 99999;' +
         'margin: 0 !important;' +
         '}' +
@@ -109,6 +109,23 @@
         else{
             element.parent().prepend(newElement);
         }
+    }
+
+    function getPositionedParent(element) {
+        var parent = element.parent();
+        var pos = parent.css('position');
+        var transform = parent.css('transform');
+
+        while (parent.length > 0 && !parent.is(document.documentElement) && (pos === 'static' || !pos) && (transform === 'none' || !transform)) {
+            parent = parent.parent();
+            pos = parent.css('position');
+            transform = parent.css('transform');
+        }
+
+        if (parent.length === 0) {
+            parent = angular.element(document.documentElement);
+        }
+        return parent;
     }
 
     var dde = document.documentElement,
@@ -205,7 +222,7 @@
 
                         if (isScrolling) {
                             setTimeout(function () {
-                                scroll(step)
+                                scroll(step, delay);
                             }, delay);
                         }
                     } else {
@@ -257,12 +274,14 @@
 				}
 
 				this.$moveUpdate = function(opts, mouse, svElement, svOriginal, svPlaceholder, originatingPart, originatingIndex){
+                    var containmentEl = opts.containment && closestElement.call(svElement, opts.containment)[0];
+
 					var svRect = getBoundingClientRect(svElement[0], true);
                     var rootRect = getBoundingClientRect($rootElement[0], true);
-                    var containmentEl = opts.containment && closestElement.call(svElement, opts.containment)[0];
                     var containmentRect = containmentEl && getBoundingClientRect(containmentEl, true);
                     var scrollBoundTop = Math.max(rootRect.top, containmentRect ? containmentRect.top : 0);
                     var scrollBoundBottom = Math.min(rootRect.bottom, containmentRect ? containmentRect.bottom : Infinity);
+
                     var pRect, pCenter;
 
 					if (opts.tolerance === 'element') {
@@ -314,8 +333,8 @@
 
 					// ----- move the element
 					$helper[0].reposition({
-						x: mouse.x + body.scrollLeft - mouse.offset.x * svRect.width,
-						y: mouse.y + body.scrollTop - mouse.offset.y * svRect.height
+						x: mouse.x - mouse.offset.x * svRect.width,
+						y: mouse.y - mouse.offset.y * svRect.height
 					}, containmentRect);
 
 					// ----- manage candidates
@@ -365,10 +384,12 @@
 						if (index === 0 && !cand.placeholder && !cand.container) {
 							$target = cand;
 							cand.element.addClass('sv-candidate');
-							if(cand.after)
-								cand.element.after($placeholder);
-							else
-								insertElementBefore(cand.element, $placeholder);
+							if (cand.after) {
+                                cand.element.after($placeholder);
+                            }
+							else {
+                                insertElementBefore(cand.element, $placeholder);
+                            }
 						}
 						else if(index === 0 && cand.container) {
 							$target = cand;
@@ -379,11 +400,12 @@
                         }
 					});
 
-                    if (scrollBoundTop >= svRect.top) {
+                    svRect = getBoundingClientRect(svElement[0], true);
+                    if (scrollBoundTop > svRect.top) {
                         isScrolling = true;
                         scroll(-5, 200);
                     }
-                    else if (scrollBoundBottom <= svRect.bottom) {
+                    else if (scrollBoundBottom < svRect.bottom) {
                         isScrolling = true;
                         scroll(5, 200);
                     } else {
@@ -673,23 +695,26 @@
 					}
 
 					clone[0].reposition = function(coords, containmentRect) {
-						var targetLeft = coords.x;
-						var targetTop = coords.y;
 						var helperRect = clone[0].getBoundingClientRect();
+                        var posParent = getPositionedParent(clone);
+                        var posParentBcr = posParent[0].getBoundingClientRect();
+                        var posParentTop = posParentBcr.top - posParent[0].scrollTop;
+                        var posParentLeft = posParentBcr.left - posParent[0].scrollLeft;
+                        var targetLeft = coords.x - posParentLeft;
+                        var targetTop = coords.y - posParentTop;
+                        var contRectTop, contRectLeft, contRectBottom, contRectRight;
 
 						if (containmentRect) {
-                            targetTop = Math.max(targetTop, containmentRect.top + body.scrollTop);// top boundary
+                            contRectTop = containmentRect.top - posParentTop;
+                            contRectLeft = containmentRect.left - posParentLeft;
+                            contRectBottom = contRectTop + containmentRect.height;
+                            contRectRight = contRectLeft + containmentRect.width;
 
-							if (targetTop + helperRect.height > containmentRect.top + body.scrollTop + containmentRect.height) // bottom boundary
-								targetTop = containmentRect.top + body.scrollTop + containmentRect.height - helperRect.height;
-
-                            targetLeft = Math.max(targetLeft, containmentRect.left + body.scrollLeft); // left boundary
-
-							if (targetLeft + helperRect.width > containmentRect.left + body.scrollLeft + containmentRect.width) // right boundary
-								targetLeft = containmentRect.left + body.scrollLeft + containmentRect.width - helperRect.width;
+                            targetTop = Math.min(contRectBottom - helperRect.height, Math.max(targetTop, contRectTop));// top boundary
+                            targetLeft = Math.min(contRectRight - helperRect.width, Math.max(targetLeft, contRectLeft));// left boundary
 						}
-						this.style.left = targetLeft - body.scrollLeft + 'px';
-						this.style.top = targetTop - body.scrollTop + 'px';
+						this.style.left = targetLeft + 'px';
+						this.style.top = targetTop + 'px';
 					};
 
 					html.addClass('sv-sorting-in-progress');
