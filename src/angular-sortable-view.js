@@ -1,5 +1,5 @@
 //
-// Copyright Kamil Pękala http://github.com/kamilkp
+// Copyright Kamil Pekala http://github.com/kamilkp
 // angular-sortable-view v0.0.15 2015/01/18
 //
 
@@ -117,13 +117,11 @@
 
     function getPositionedParent(element) {
         var parent = element.parent();
-        var pos = parent.css('position');
-        var transform = parent.css('transform');
+		var style = window.getComputedStyle(parent[0]);
 
-        while (parent.length > 0 && !parent.is(document.documentElement) && (pos === 'static' || !pos) && (transform === 'none' || !transform)) {
+        while (parent.length > 0 && !parent.is(document.documentElement) && (style.position === 'static') && (style.transform === 'none' || !style.transform)) {
             parent = parent.parent();
-            pos = parent.css('position');
-            transform = parent.css('transform');
+            style = window.getComputedStyle(parent[0]);
         }
 
         if (parent.length === 0) {
@@ -131,6 +129,23 @@
         }
         return parent;
     }
+
+	function getOffsetExcludingScroll(element) {
+		var position = {
+			left: element.offsetLeft,
+			top: element.offsetTop
+		};
+		// compensate scroll
+		var node = element.parentNode;
+		var style = window.getComputedStyle(node);
+		while (node && node.tagName !== 'BODY' && style.position === 'static') {
+			position.top -= node.scrollTop;
+			position.left -= node.scrollLeft;
+			node = node.parentNode;
+			style = window.getComputedStyle(node);
+		}
+		return position;
+	}
 
     var dde = document.documentElement,
         matchingFunction = dde.matches ? 'matches' :
@@ -161,7 +176,7 @@
         while (el !== document.documentElement && !el[matchingFunction](selector)) {
             el = el.parentNode;
         }
-
+		
         if(el[matchingFunction](selector)) {
             return angular.element(el);
         }
@@ -185,7 +200,6 @@
 
 		var sortingInProgress;
 		var ROOTS_MAP = Object.create(null);
-        var body = document.body;
 		// window.ROOTS_MAP = ROOTS_MAP; // for debug purposes
 
 		return {
@@ -292,11 +306,10 @@
 
 				this.$moveUpdate = function(opts, mouse, svElement, svOriginal, svPlaceholder, originatingPart, originatingIndex){
                     var containmentEl = opts.containment && closestElement.call(svElement, opts.containment)[0];
-
-					var svRect = getBoundingClientRect(svElement[0], true);
-                    var rootRect = getBoundingClientRect($rootElement[0], true);
-                    var containmentRect = containmentEl && getBoundingClientRect(containmentEl, true);
-                    var scrollBoundTop = Math.max(rootRect.top, containmentRect ? containmentRect.top : 0);
+					var svRect = svElement[0].getBoundingClientRect();
+                    var rootRect = $rootElement[0].getBoundingClientRect();
+                    var containmentRect = containmentEl && containmentEl.getBoundingClientRect();
+					var scrollBoundTop = Math.max(rootRect.top, containmentRect ? containmentRect.top : 0);
                     var scrollBoundBottom = Math.min(rootRect.bottom, containmentRect ? containmentRect.bottom : Infinity);
 
                     var pRect, pCenter;
@@ -418,14 +431,15 @@
 					});
 
                     svRect = getBoundingClientRect(svElement[0], true);
-                    if (scrollBoundTop > svRect.top) {
-                        scroll(-SCROLL_DISTANCE, SCROLL_TIMEOUT);
-                    }
-                    else if (scrollBoundBottom < svRect.bottom) {
-                        scroll(SCROLL_DISTANCE, SCROLL_TIMEOUT);
-                    } else {
-                        this.stopScrolling();
-                    }
+					// no autoscroll
+                    // if (scrollBoundTop > svRect.top) {
+                    //     scroll(-SCROLL_DISTANCE, SCROLL_TIMEOUT);
+                    // }
+                    // else if (scrollBoundBottom < svRect.bottom) {
+                    //     scroll(SCROLL_DISTANCE, SCROLL_TIMEOUT);
+                    // } else {
+                    //     this.stopScrolling();
+                    // }
 				};
 
 				this.$drop = function(originatingPart, index, options){
@@ -447,10 +461,7 @@
 								$helper[0].style[prefix + 'transition'] = 'all ' + duration + 'ms ease';
 						});
 						setTimeout(afterRevert, duration);
-						$helper.css({
-							'top': placeholderRect.top + body.scrollTop + 'px',
-							'left': placeholderRect.left + body.scrollLeft + 'px'
-						});
+						$helper.css(getOffsetExcludingScroll($placeholder[0]));
 					}
 					else
 						afterRevert();
@@ -528,7 +539,7 @@
 			restrict: 'A',
 			require: '^svRoot',
 			controller: ['$scope', function($scope){
-				$scope.$ctrl = this;
+				$scope.$svRootCtrl = this;
 				this.getPart = function(){
 					return $scope.part;
 				};
@@ -557,7 +568,7 @@
 
 				var sortablePart = {
 					element: $element,
-					getPart: $scope.$ctrl.getPart,
+					getPart: $scope.$svRootCtrl.getPart,
 					container: true
 				};
 				$sortable.addToSortableElements(sortablePart);
@@ -573,10 +584,9 @@
 			restrict: 'A',
 			require: ['^svPart', '^svRoot'],
 			controller: ['$scope', function($scope){
-				$scope.$ctrl = this;
+				$scope.$svElementCtrl = this;
 			}],
 			link: function($scope, $element, $attrs, $controllers){
-                var body = document.body;
 			    var touchEndEvents = 'touchend touchcancel';
                 var endEvents = 'mouseup ' + touchEndEvents;
                 var moveEvents = 'mousemove touchmove';
@@ -611,7 +621,7 @@
 				handle.on('touchstart', onTouchStart);
                 handle.on('mousedown', onMouseDown);
 
-				$scope.$watch('$ctrl.handle', function(customHandle){
+				$scope.$watch('$svElementCtrl.handle', function(customHandle){
 					if(customHandle){
                         cleanupStartEvents();
 
@@ -622,13 +632,13 @@
 					}
 				});
 
-				$scope.$watch('$ctrl.helper', function(customHelper){
+				$scope.$watch('$svElementCtrl.helper', function(customHelper){
 					if(customHelper){
 						helper = customHelper;
 					}
 				});
 
-				$scope.$watch('$ctrl.placeholder', function(customPlaceholder){
+				$scope.$watch('$svElementCtrl.placeholder', function(customPlaceholder){
 					if(customPlaceholder){
 						placeholder = customPlaceholder;
 					}
@@ -694,17 +704,11 @@
 					if(helper){
 						clone = helper.clone();
 						clone.removeClass('ng-hide');
-						clone.css({
-							'left': clientRect.left + body.scrollLeft + 'px',
-							'top': clientRect.top + body.scrollTop + 'px'
-						});
 						target.addClass('sv-visibility-hidden');
 					}
 					else{
 						clone = target.clone();
 						clone.addClass('sv-helper').css({
-							'left': clientRect.left + body.scrollLeft + 'px',
-							'top': clientRect.top + body.scrollTop + 'px',
 							'width': clientRect.width + 'px'
 						});
 					}
@@ -712,18 +716,19 @@
 					clone[0].reposition = function(coords, containmentRect) {
 						var helperRect = clone[0].getBoundingClientRect();
                         var posParent = getPositionedParent(clone);
+						var isPosParentADocument = posParent[0].tagName === 'HTML';
                         var posParentBcr = posParent[0].getBoundingClientRect();
-                        var posParentTop = posParentBcr.top - posParent[0].scrollTop;
-                        var posParentLeft = posParentBcr.left - posParent[0].scrollLeft;
+                        var posParentTop = posParentBcr.top - (isPosParentADocument ? 0 : posParent[0].scrollTop);
+                        var posParentLeft = posParentBcr.left - (isPosParentADocument ? 0 : posParent[0].scrollLeft);
                         var targetLeft = coords.x - posParentLeft;
                         var targetTop = coords.y - posParentTop;
                         var contRectTop, contRectLeft, contRectBottom, contRectRight;
 
 						if (containmentRect) {
-                            contRectTop = containmentRect.top - posParentTop;
-                            contRectLeft = containmentRect.left - posParentLeft;
-                            contRectBottom = contRectTop + containmentRect.height;
-                            contRectRight = contRectLeft + containmentRect.width;
+                            contRectTop = containmentRect.top - posParentTop + (isPosParentADocument ? document.body.scrollTop || document.documentElement.scrollTop : 0);
+                            contRectLeft = containmentRect.left - posParentLeft + (isPosParentADocument ? document.body.scrollLeft || document.documentElement.scrollLeft : 0);
+                            contRectBottom = posParent[0].offsetTop + clone[0].parentNode.offsetTop + contRectTop + containmentRect.height - 1;
+                            contRectRight = posParent[0].offsetLeft + clone[0].parentNode.offsetLeft + contRectLeft + containmentRect.width;
 
                             targetTop = Math.min(contRectBottom - helperRect.height, Math.max(targetTop, contRectTop));// top boundary
                             targetLeft = Math.min(contRectRight - helperRect.width, Math.max(targetLeft, contRectLeft));// left boundary
