@@ -119,7 +119,7 @@
         var parent = element.parent();
 		var style = window.getComputedStyle(parent[0]);
 
-        while (parent.length > 0 && !parent.is(document.documentElement) && (style.position === 'static') && (style.transform === 'none' || !style.transform)) {
+        while (parent.length > 0 && parent[0].tagName !== 'BODY' && (style.position === 'static') && (style.transform === 'none' || !style.transform)) {
             parent = parent.parent();
             style = window.getComputedStyle(parent[0]);
         }
