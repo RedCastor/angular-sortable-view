@@ -120,7 +120,7 @@
         var pos = parent.css('position');
         var transform = parent.css('transform');
 
-        while (parent.length > 0 && !parent.is(document.documentElement) && (pos === 'static' || !pos) && (transform === 'none' || !transform)) {
+        while (parent.length > 0 && parent[0].tagName !== 'BODY' && (pos === 'static' || !pos) && (transform === 'none' || !transform)) {
             parent = parent.parent();
             pos = parent.css('position');
             transform = parent.css('transform');
