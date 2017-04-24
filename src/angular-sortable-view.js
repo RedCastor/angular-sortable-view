@@ -56,12 +56,12 @@
     function touchFix(e){
         if(e.clientX === undefined && e.clientY === undefined) {
             var touches = e.touches || e.originalEvent.touches;
-            if(touches && touches.length) {
+            if (touches && touches.length) {
                 e.clientX = touches[0].clientX;
                 e.clientY = touches[0].clientY;
             }
-            e.preventDefault();
         }
+		e.preventDefault();
     }
 
     function getPreviousSibling(element){
@@ -160,7 +160,7 @@
 		list.push(document.documentElement); // assume as always scrollable
 		return list;
 	}
-
+	
     var dde = document.documentElement,
         matchingFunction = dde.matches ? 'matches' :
             dde.matchesSelector ? 'matchesSelector' :
@@ -171,7 +171,7 @@
                                 dde.mozMatches ? 'mozMatches' :
                                     dde.mozMatchesSelector ? 'mozMatchesSelector' : null;
 
-    if(matchingFunction == null) {
+    if (matchingFunction == null) {
         throw 'This browser doesn\'t support the HTMLElement.matches method';
     }
 
@@ -199,6 +199,16 @@
         }
     };
 
+	// Test via a getter in the options object to see if the passive property is accessed
+	var supportsPassive = false;
+	try {
+		var opts = Object.defineProperty({}, 'passive', {
+			get: function() {
+				supportsPassive = true;
+			}
+		});
+		window.addEventListener("test", null, opts);
+	} catch (e) {};
 
 	var module = angular.module('angular-sortable-view', []);
 	module.directive('svRoot', [function(){
@@ -620,7 +630,7 @@
 			link: function($scope, $element, $attrs, $controllers){
 			    var touchEndEvents = 'touchend touchcancel';
                 var endEvents = 'mouseup ' + touchEndEvents;
-                var moveEvents = 'mousemove touchmove';
+                var moveEvents = 'mousemove' + (supportsPassive ? '' : ' touchmove');
 
                 var handle = $element;
 				var sortableElement = {
@@ -638,6 +648,7 @@
                 var placeholder;
 
                 function cleanupStartEvents() {
+					$element.off('touchstart', onTouchStart);
                     handle.off('touchstart', onTouchStart);
                     handle.off('mousedown', onMouseDown);
                 }
@@ -649,7 +660,7 @@
 					$controllers[1].removeFromSortableElements(sortableElement);
 				});
 
-				handle.on('touchstart', onTouchStart);
+				$element.on('touchstart', onTouchStart);
                 handle.on('mousedown', onMouseDown);
 
 				$scope.$watch('$svElementCtrl.handle', function(customHandle){
@@ -677,22 +688,25 @@
 
                 function onTouchStart(e){
                     var cancelEvents = moveEvents + ' ' + endEvents;
+					var touchdown = Date.now();
 
-                    function switchToMousedown() {
-                        cancel();
-                        onMouseDown(e, true);
+                    function onTouchMove(e) {
+						if (supportsPassive) {
+							document.removeEventListener('touchmove', onTouchMove, { passive: false });
+						} else {
+                        	html.off('touchmove', onTouchMove);
+						}
+						// only start dragging 
+						if (touchdown + DRAG_START_TIMEOUT < Date.now()) {
+							e.preventDefault();
+							onMouseDown(e, true);
+						}
                     }
-
-                    function cancel(e) {
-                        clearTimeout(switchTimer);
-                        html.off(cancelEvents, cancel);
-                    }
-
-                    var switchTimer;
-
-                    html.on('touchmove ' + touchEndEvents, cancel);
-
-                    switchTimer = setTimeout(switchToMousedown, DRAG_START_TIMEOUT);
+					if (supportsPassive) {
+						document.addEventListener('touchmove', onTouchMove, { passive: false });
+					} else {
+                    	html.on('touchmove', onTouchMove);
+					}
                 }
 
 				function onMouseDown(e, runMouseMoveHandler) {
@@ -770,11 +784,17 @@
 
 					html.addClass('sv-sorting-in-progress');
 					html.on(moveEvents, onMousemove).on(endEvents, onMouseup);
+					if (supportsPassive) {
+						document.addEventListener('touchmove', onMousemove, { passive: false });
+					}
 
                     function onMouseup(e){
                         $controllers[1].stopScrolling();
                         html.off(moveEvents, onMousemove);
                         html.off(endEvents, onMouseup);
+						if (supportsPassive) {
+							document.removeEventListener('touchmove', onMousemove, { passive: false });
+						}
                         html.removeClass('sv-sorting-in-progress');
                         if(moveExecuted){
                             $controllers[0].$drop($scope.$index, opts);
