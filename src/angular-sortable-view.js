@@ -119,7 +119,7 @@
         var parent = element.parent();
 		var style = window.getComputedStyle(parent[0]);
 
-        while (parent.length > 0 && parent[0].tagName !== 'BODY' && (style.position === 'static') && (style.transform === 'none' || !style.transform)) {
+        while (parent.length > 0 && parent[0].tagName !== 'HTML' && (style.position === 'static') && (style.transform === 'none' || !style.transform)) {
             parent = parent.parent();
             style = window.getComputedStyle(parent[0]);
         }
@@ -145,6 +145,20 @@
 			style = window.getComputedStyle(node);
 		}
 		return position;
+	}
+
+	function findScrollableParents(node) {
+		var list = [];
+		var style;
+		while (node && node !== document.body) {
+			style = window.getComputedStyle(node);
+			if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+				list.push(node);
+			}
+			node = node.parentNode;
+		}
+		list.push(document.documentElement); // assume as always scrollable
+		return list;
 	}
 
     var dde = document.documentElement,
@@ -200,12 +214,13 @@
 
 		var sortingInProgress;
 		var ROOTS_MAP = Object.create(null);
+		var ROOT_COUNT = 0;
 		// window.ROOTS_MAP = ROOTS_MAP; // for debug purposes
 
 		return {
 			restrict: 'A',
 			controller: ['$scope', '$attrs', '$interpolate', '$parse', '$element', function($scope, $attrs, $interpolate, $parse, $rootElement){
-				var mapKey = $interpolate($attrs.svRoot)($scope) || $scope.$id;
+				var mapKey = $interpolate($attrs.svRoot)($scope) || ++ROOT_COUNT;
 				var candidates;  // set of possible destinations
 				var $placeholder;// placeholder element
 				var options;     // sortable options
@@ -216,6 +231,8 @@
 				var onSort       = $parse($attrs.svOnSort);
                 var isScrolling = false;
                 var scrollingTimeoutId;
+				var scrollableParents = findScrollableParents($rootElement[0]);
+
 
                 if (!ROOTS_MAP[mapKey]) {
                     ROOTS_MAP[mapKey] = [];
@@ -232,20 +249,22 @@
 				var onStart = $parse($attrs.svOnStart);
 				var onStop = $parse($attrs.svOnStop);
 
-                var scroll = function (step, delay) {
-                    var rootElement = $rootElement[0];
-                    var scrollTop = rootElement.scrollTop;
-                    var upperBound = Math.max(0, rootElement.scrollHeight - rootElement.clientHeight);
-                    var newScrollTop = Math.min(Math.max(0, rootElement.scrollTop + step), upperBound);
+                var scroll = function (step, delay, target) {
+					
+                    var scrollTop = target.scrollTop;
+                    var upperBound = Math.max(0, target.scrollHeight - (target === document.body ? document.documentElement.clientHeight : target.clientHeight));
+                    var newScrollTop = Math.min(Math.max(0, target.scrollTop + step), upperBound);
                     isScrolling = true;
 
                     if (newScrollTop !== scrollTop) {
-                        rootElement.scrollTop = newScrollTop;
+                        target.scrollTop = newScrollTop;
+
+						clearTimeout(scrollingTimeoutId);
 
                         scrollingTimeoutId = setTimeout(function () {
                             scrollingTimeoutId = null;
                             if (isScrolling) {
-                                scroll(step, delay);
+                                scroll(step, delay, target);
                             }
                         }, delay);
                     } else {
@@ -309,8 +328,6 @@
 					var svRect = svElement[0].getBoundingClientRect();
                     var rootRect = $rootElement[0].getBoundingClientRect();
                     var containmentRect = containmentEl && containmentEl.getBoundingClientRect();
-					var scrollBoundTop = Math.max(rootRect.top, containmentRect ? containmentRect.top : 0);
-                    var scrollBoundBottom = Math.min(rootRect.bottom, containmentRect ? containmentRect.bottom : Infinity);
 
                     var pRect, pCenter;
 
@@ -430,16 +447,30 @@
                         }
 					});
 
+					// trigger autoscrolling if needed
                     svRect = getBoundingClientRect(svElement[0], true);
-					// no autoscroll
-                    // if (scrollBoundTop > svRect.top) {
-                    //     scroll(-SCROLL_DISTANCE, SCROLL_TIMEOUT);
-                    // }
-                    // else if (scrollBoundBottom < svRect.bottom) {
-                    //     scroll(SCROLL_DISTANCE, SCROLL_TIMEOUT);
-                    // } else {
-                    //     this.stopScrolling();
-                    // }
+					var currentParent, currentParentRect;
+					for (var i = 0, len = scrollableParents.length; i< len; i++) {
+						currentParent = scrollableParents[i];
+						currentParentRect = currentParent.getBoundingClientRect();
+						// handle browser inconsistency
+						if (currentParent === document.documentElement && document.body.scrollTop > 0) {
+							currentParent = document.body;
+						}
+						// check if helper is close to any edge
+						if (currentParent.scrollTop > 0 && (currentParentRect.top > svRect.top || svRect.top <= 0)) {
+							scroll(-SCROLL_DISTANCE, SCROLL_TIMEOUT, currentParent);
+							break;
+						} else if (currentParent.scrollTop < currentParent.scrollHeight - (currentParent === document.body ? document.documentElement : currentParent).clientHeight
+								&& ((currentParent !== document.body && currentParent !== document.documentElement && currentParentRect.bottom < svRect.bottom) || svRect.bottom > window.innerHeight)) {
+							scroll(SCROLL_DISTANCE, SCROLL_TIMEOUT, currentParent);
+							break;
+						} else if (isScrolling) {
+							this.stopScrolling();
+						}
+						
+					}
+                    
 				};
 
 				this.$drop = function(originatingPart, index, options){
