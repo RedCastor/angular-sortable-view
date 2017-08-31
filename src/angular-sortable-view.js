@@ -659,12 +659,12 @@
 				function onMouseDown(e, runMouseMoveHandler) {
 					touchFix(e);
 
-					//Fix body position
-					var body_style;
-					if (body.style.position !== 'relative') {
-						body_style = body.style;
-						body.style.position = 'relative';
-					}
+                    //Fix body position
+                    var body_position;
+                    if (body.style.position !== 'relative') {
+                        body_position = body.style.position;
+                        body.style.position = 'relative';
+                    }
 					
 					if ($controllers[1].sortingInProgress()) {
 					    return;
@@ -753,11 +753,11 @@
                             $controllers[0].$drop($scope.$index, opts);
                         }
                         $element.removeClass('sv-visibility-hidden');
-						
-						//Restore Body Style
-						if (body_style) {
-							body.style = body_style;
-						}
+
+                        //Restore Body Style
+                        if (angular.isDefined(body_position)) {
+                            body.style.position = body_position;
+                        }
                     }
 
 					function onMousemove(e){
