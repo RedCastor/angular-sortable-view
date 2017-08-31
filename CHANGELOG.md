@@ -1,3 +1,9 @@
+Version 0.0.17 - 2017/08/31
+================
+
+  * Bug fix body position absolute.
+
+
 Version 0.0.15 - 2016/01/18
 ================
 
